@@ -18,40 +18,21 @@ sub usage() {
       . "-h print this screen\n"
       . "-v dump smtp session\n"
       . "-s smtp server - eg. mx.babel.it:25\n"
+      . "-e EHLO string\n"
       . "-f sender\n"
       . "-t recipient\n"
+      . "-c cc-recipient	- you can use multiple -c params\n"
+      . "-b bcc-recipient	- you can use multiple -b params\n"
       . "-a auth_type: LOGIN, PLAIN\n"
       . "-u username\n"
       . "-p password\n"
-      . "-S subject\n"
+      . "-j subject\n"
       . "-m message body\n"
       . "-d data file - use the given file to fill the whole DATA section of the smpt session\n"
       . "\n";
 
     exit(1);
 }
-
-sub my_getopt($) {    #opthash
-    my $opts_allowed = "hv"    #help verbose
-      . "s:f:t:c:b"            # basic options
-      . "a:u:p:"               # authentication options
-      . "d:S:m:"               # body options
-      . "H:"                   # helo
-      ;
-
-    my $i    = 0;
-    my %opts = %{$_};
-    my @args = ();
-    foreach my $field (
-        'f' => 't' => 'c' => 'b' => 'a' => 'u' => 'p' => 'S' => 'm' => 'd' =>
-        'H' )
-    {
-        $args[$i] = $opts{$field} if ( defined( $opts{$field} ) );
-        $i++;
-    }
-    return \@args;
-}
-
 
 #
 # Return an encoded string for PLAIN login
@@ -156,11 +137,12 @@ sub main() {
         die("Missing file $data_file") unless ( -e $data_file );
         die("Data file overrides subject and message body")
           if ( $message_body or $subject );
-        $data = "`cat $data_file`";
+        $data = `cat $data_file`;
     }
     else {
         die("Missing subject") unless ($subject);
         die("Missing body")    unless ($message_body);
+        $data = sprintf("Subject: %s\r\n\r\n%s", $subject, $message_body);
     }
 
     #
@@ -206,7 +188,7 @@ sub main() {
     # Finally add data
     #
     $mailer->data;
-    $mailer->datasend($message_body);
+    $mailer->datasend($data);
     $mailer->dataend;
     $mailer->quit;
 
