@@ -1,4 +1,9 @@
 #!/usr/bin/perl -w
+# 
+# GPLv3 - (c) Babel srl www.babel.it
+#
+# Author: rpolli@babel.it
+#
 use strict;
 use Net::SMTP;
 use Getopt::Long;
