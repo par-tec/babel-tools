@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w
-# 
+#
 # GPLv3 - (c) Babel srl www.babel.it
 #
 # Author: rpolli@babel.it
@@ -81,12 +81,10 @@ sub auth_smtp_login($$$) {    #mailer username password
 
 }
 
-
-
 sub main() {
     my @notify = qw/NEVER/;
-    my @cc    = ();
-    my @bcc   = ();
+    my @cc     = ();
+    my @bcc    = ();
     my $help;
 
     my ( $server, $port ) = qw/localhost 25/;
@@ -97,19 +95,20 @@ sub main() {
     );
 
     my $result = GetOptions(
-        's=s'      => \$server, 	# server options
+        's=s'      => \$server,         # server options
         'e|ehlo=s' => \$helo,
         'c|cc=s'   => \@cc,
         'b|bcc=s'  => \@bcc,
         'f=s'      => \$sender,
         't=s'      => \$recipient,
-        'a=s'      => \$auth_type,	#authentication
+        'a=s'      => \$auth_type,      #authentication
         'u=s'      => \$username,
         'p=s'      => \$password,
-        'd=s'      => \$data_file,		#body options
+        'd=s'      => \$data_file,      #body options
         'j=s'      => \$subject,
         'm=s'      => \$message_body,
-        'v'        => \$verbose, 'h|help' => \$help    # help verbose
+        'v'        => \$verbose,
+        'h|help'   => \$help            # help verbose
     );
 
     usage() if ($help);
@@ -118,8 +117,6 @@ sub main() {
     }
 
     ( $server, $port ) = split( /:/, $server ) if ($server);
-
-
 
     #validate input parameters
     die("Missing SMTP host or port") unless ( $server and $port );
@@ -147,7 +144,7 @@ sub main() {
     else {
         die("Missing subject") unless ($subject);
         die("Missing body")    unless ($message_body);
-        $data = sprintf("Subject: %s\r\n\r\n%s", $subject, $message_body);
+        $data = sprintf( "Subject: %s\r\n\r\n%s", $subject, $message_body );
     }
 
     #
@@ -186,8 +183,8 @@ sub main() {
       or die("KO: rejected sender: $sender");
     $mailer->to($recipient)
       or die("KO: rejected recipient: $recipient");
-    $mailer->cc( @cc) if ( @cc >0 );
-    $mailer->bcc( @bcc ) if ( @bcc >0 );
+    $mailer->cc(@cc)   if ( @cc > 0 );
+    $mailer->bcc(@bcc) if ( @bcc > 0 );
 
     #
     # Finally add data
@@ -198,7 +195,7 @@ sub main() {
     $mailer->quit;
 
     print "mail sent OK\n";
-    exit (0);
+    exit(0);
 
 }
 &main();
