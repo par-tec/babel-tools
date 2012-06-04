@@ -20,20 +20,20 @@ sub usage() {
 "Usage: $0 -s server:port -f from -t to -c cc -b bcc -m message -a auth_type -u user -p pass -S subject -d data_file\n"
       . "\n"
       . "Send an email using the given parameters\n"
-      . "-h print this screen\n"
-      . "-v dump smtp session\n"
-      . "-s smtp server - eg. mx.babel.it:25\n"
-      . "-e EHLO string\n"
-      . "-f sender\n"
-      . "-t recipient\n"
-      . "-c cc-recipient	- you can use multiple -c params\n"
-      . "-b bcc-recipient	- you can use multiple -b params\n"
-      . "-a auth_type: LOGIN, PLAIN\n"
-      . "-u username\n"
-      . "-p password\n"
-      . "-j subject\n"
-      . "-m message body\n"
-      . "-d data file - use the given file to fill the whole DATA section of the smpt session\n"
+      . "  -h print this screen\n"
+      . "  -v dump smtp session\n"
+      . "  -s smtp server - eg. mx.babel.it:25\n"
+      . "  -e EHLO string\n"
+      . "  -f sender\n"
+      . "  -t recipient\n"
+      . "  -c cc-recipient	- you can use multiple -c params\n"
+      . "  -b bcc-recipient	- you can use multiple -b params\n"
+      . "  -a auth_type: LOGIN, PLAIN\n"
+      . "  -u username\n"
+      . "  -p password\n"
+      . "  -j subject\n"
+      . "  -m message body\n"
+      . "  -d data file - use the given file to fill the whole DATA section of the smpt session\n"
       . "\n";
 
     exit(1);
@@ -82,6 +82,8 @@ sub auth_smtp_login($$$) {    #mailer username password
 }
 
 sub main() {
+	my ($argc, @argv) = ($#ARGV, @ARGV);
+
     my @notify = qw/NEVER/;
     my @cc     = ();
     my @bcc    = ();
@@ -111,7 +113,8 @@ sub main() {
         'h|help'   => \$help            # help verbose
     );
 
-    usage() if ($help);
+    usage() if ($help or $argc<1);
+    
     if ($verbose) {
         @notify = qw/SUCCESS FAILURE DELAY/;
     }
@@ -119,7 +122,7 @@ sub main() {
     ( $server, $port ) = split( /:/, $server ) if ($server);
 
     #validate input parameters
-    die("Missing SMTP host or port") unless ( $server and $port );
+    die("Missing SMTP host or port: use -s server:port") unless ( $server and $port );
 
     # sender and recipient are compulsory
     die("Missing sender or recipient") unless ( $sender and $recipient );
@@ -142,8 +145,8 @@ sub main() {
         $data = `cat $data_file`;
     }
     else {
-        die("Missing subject") unless ($subject);
-        die("Missing body")    unless ($message_body);
+        die("Missing subject: use -j 'subject string'") unless ($subject);
+        die("Missing body: use -m 'message body\n eventually spanning more lines.\n'")    unless ($message_body);
         $data = sprintf( "Subject: %s\r\n\r\n%s", $subject, $message_body );
     }
 
