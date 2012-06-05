@@ -4,6 +4,8 @@
 #
 # Author: rpolli@babel.it
 #
+# TODO send multiple attachments
+#
 use strict;
 use Net::SMTP;
 use Getopt::Long;
@@ -21,11 +23,11 @@ sub usage() {
       . "\n"
       . "Send an email using the given parameters\n"
       . "  -h print this screen\n"
-      . "  -v dump smtp session\n"
+      . "  -v verbosely dump smtp session\n"
       . "  -s smtp server - eg. mx.babel.it:25\n"
       . "  -e EHLO string\n"
-      . "  -f sender\n"
-      . "  -t recipient\n"
+      . "  -f sender - set MAIL FROM\n"
+      . "  -t recipient - set RCPT TO\n"
       . "  -c cc-recipient	- you can use multiple -c params\n"
       . "  -b bcc-recipient	- you can use multiple -b params\n"
       . "  -a auth_type: LOGIN, PLAIN\n"
@@ -87,6 +89,8 @@ sub auth_smtp_login($$$) {    #mailer username password
 #
 sub datasend_attachment($$) {    #filename
     my ( $body, $path ) = @_;
+    my $filename = $path;
+    $filename =~ s|.*/||g;
 
     open( DATA, $path ) || die("Could not open the file:  $path");
 
@@ -118,8 +122,8 @@ sub datasend_attachment($$) {    #filename
     my $attachment_header =
         "\n\n--$boundary\n"
       . "Content-Transfer-Encoding: base64\n"
-      . "Content-Type: application/*; name=\"$path\"\n"
-      . "Content-Disposition: attachment; filename=\"$path\"\n" . "\n";
+      . "Content-Type: application/*; name=\"$filename\"\n"
+      . "Content-Disposition: attachment; filename=\"$filename\"\n" . "\n";
 
     my $attachment_body = "";
     my $buff;
@@ -149,9 +153,10 @@ sub main() {
 
     my ( $server, $port ) = qw/localhost 25/;
     my (
-        $sender,   $recipient, $cc,      $bcc,          $auth_type,
-        $username, $password,  $subject, $message_body, $data_file,
-        $helo,     $data,      $attachment
+        $sender,       $recipient, $cc,       $bcc,
+        $auth_type,    $username,  $password, $subject,
+        $message_body, $data_file, $helo,     $data,
+        $attachment,   $data_header
     );
 
     my $result = GetOptions(
@@ -209,7 +214,8 @@ sub main() {
         die(
 "Missing body: use -m 'message body\n eventually spanning more lines.\n'"
         ) unless ($message_body);
-        $data = sprintf( "Subject: %s\r\n\r\n%s", $subject, $message_body );
+        $data_header = sprintf( "Subject: %s\r\n", $subject );
+        $data = $message_body;
     }
 
     #
@@ -248,8 +254,16 @@ sub main() {
       or die("KO: rejected sender: $sender");
     $mailer->to($recipient)
       or die("KO: rejected recipient: $recipient");
-    $mailer->cc(@cc)   if ( @cc > 0 );
+
     $mailer->bcc(@bcc) if ( @bcc > 0 );
+
+    #
+    # Set data header
+    #
+    if ( @cc > 0 ) {
+        $mailer->cc(@cc);
+        $data_header .= "CC: " . join( ',', @cc ) . "\r\n";
+    }
 
     #
     # Eventually add one attachment, encapsulating data in a
@@ -263,6 +277,10 @@ sub main() {
     #
     $mailer->data;
 
+    # headers will never go into a mime message
+    $mailer->datasend($data_header);
+
+    # data may be embedded in a mime message
     $mailer->datasend($data);
     $mailer->dataend;
     $mailer->quit;
