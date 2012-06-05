@@ -31,8 +31,9 @@ sub usage() {
       . "  -a auth_type: LOGIN, PLAIN\n"
       . "  -u username\n"
       . "  -p password\n"
-      . "  -j subject\n"
+      . "  -j subJect\n"
       . "  -m message body\n"
+      . "  -n attachmeNt\n"
       . "  -d data file - use the given file to fill the whole DATA section of the smpt session\n"
       . "\n";
 
@@ -81,8 +82,65 @@ sub auth_smtp_login($$$) {    #mailer username password
 
 }
 
+#
+# Prepare Attachment body
+#
+sub datasend_attachment($$) {    #filename
+    my ( $body, $path ) = @_;
+
+    open( DATA, $path ) || die("Could not open the file:  $path");
+
+    my $boundary = rand(1000000) . "antani" . rand(1000000);
+
+    #
+    # Attachment body is base64 encoded,
+    #  has a mimetype and a boundary
+    #
+    my $mime_header =
+        "Content-Transfer-Encoding: 7bit\n"
+      . "Content-type: multipart/mixed; boundary=\"$boundary\"\n"
+      . "MIME-Version: 1.0\n"
+      . "This is a multi-part message in MIME format.\n" . "\n";
+
+    #
+    # Text part: body starts immediately after the Content-Type
+    #   just one LF is needed
+    #
+    my $text_part =
+        "\n\n--$boundary\n"
+      . "Content-Transfer-Encoding: binary\n"
+      . "Content-Type: text/plain\n" . "$body";
+
+    #
+    # Attachment part
+    #  boundary starts with --$boundary and ends with --$boundary--
+    #
+    my $attachment_header =
+        "\n\n--$boundary\n"
+      . "Content-Transfer-Encoding: base64\n"
+      . "Content-Type: application/*; name=\"$path\"\n"
+      . "Content-Disposition: attachment; filename=\"$path\"\n" . "\n";
+
+    my $attachment_body = "";
+    my $buff;
+    while ( read( DATA, $buff, 4096 ) ) {
+        $attachment_body .= encode_base64($buff);
+    }
+    my $mime_footer = "--$boundary--\n";
+
+    close(DATA);
+
+    return
+        $mime_header
+      . $text_part
+      . $attachment_header
+      . $attachment_body
+      . $mime_footer;
+
+}
+
 sub main() {
-	my ($argc, @argv) = ($#ARGV, @ARGV);
+    my ( $argc, @argv ) = ( $#ARGV, @ARGV );
 
     my @notify = qw/NEVER/;
     my @cc     = ();
@@ -91,9 +149,9 @@ sub main() {
 
     my ( $server, $port ) = qw/localhost 25/;
     my (
-        $sender,       $recipient, $cc,       $bcc,
-        $auth_type,    $username,  $password, $subject,
-        $message_body, $data_file, $helo,     $data
+        $sender,   $recipient, $cc,      $bcc,          $auth_type,
+        $username, $password,  $subject, $message_body, $data_file,
+        $helo,     $data,      $attachment
     );
 
     my $result = GetOptions(
@@ -109,12 +167,13 @@ sub main() {
         'd=s'      => \$data_file,      #body options
         'j=s'      => \$subject,
         'm=s'      => \$message_body,
+        'n=s'      => \$attachment,
         'v'        => \$verbose,
         'h|help'   => \$help            # help verbose
     );
 
-    usage() if ($help or $argc<1);
-    
+    usage() if ( $help or $argc < 1 );
+
     if ($verbose) {
         @notify = qw/SUCCESS FAILURE DELAY/;
     }
@@ -122,7 +181,8 @@ sub main() {
     ( $server, $port ) = split( /:/, $server ) if ($server);
 
     #validate input parameters
-    die("Missing SMTP host or port: use -s server:port") unless ( $server and $port );
+    die("Missing SMTP host or port: use -s server:port")
+      unless ( $server and $port );
 
     # sender and recipient are compulsory
     die("Missing sender or recipient") unless ( $sender and $recipient );
@@ -146,7 +206,9 @@ sub main() {
     }
     else {
         die("Missing subject: use -j 'subject string'") unless ($subject);
-        die("Missing body: use -m 'message body\n eventually spanning more lines.\n'")    unless ($message_body);
+        die(
+"Missing body: use -m 'message body\n eventually spanning more lines.\n'"
+        ) unless ($message_body);
         $data = sprintf( "Subject: %s\r\n\r\n%s", $subject, $message_body );
     }
 
@@ -190,9 +252,17 @@ sub main() {
     $mailer->bcc(@bcc) if ( @bcc > 0 );
 
     #
+    # Eventually add one attachment, encapsulating data in a
+    #  multipart message
+    #
+    $data = datasend_attachment( $data, $attachment )
+      if ( defined $attachment );
+
+    #
     # Finally add data
     #
     $mailer->data;
+
     $mailer->datasend($data);
     $mailer->dataend;
     $mailer->quit;

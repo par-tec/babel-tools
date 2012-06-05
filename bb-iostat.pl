@@ -22,18 +22,19 @@ sub colorize($$) {    #string, colorize
 sub usage() {
     print "usage: $0 interval device pagination [options]\n" . "\n"
       . "Like iostat but showing some more statistics\n" . "\n"
-      ."options:\n"
-      ." -i : print data in iostat format\n"
-      ." -s : print size in sectors instead of KiloBytes\n"
-	  ." -m : print size in megabytes instead of KiloBytes\n"
+      . "options:\n"
+      . " -i : print data in iostat format\n"
+      . " -s : print size in sectors instead of KiloBytes\n"
+      . " -m : print size in megabytes instead of KiloBytes\n"
 
-      ."\n";
+      . "\n";
     exit 1;
 }
 
 # parse input parameters
 my ( $interval, $device, $pagination ) = @ARGV;
-my ( $iostat_like, $verbose, $megabytes, $output_in_sectors, $size_factor, $help );
+my ( $iostat_like, $verbose, $megabytes, $output_in_sectors, $size_factor,
+    $help );
 
 die("missing interval")   unless ($interval);
 die("missing device")     unless ($device);
@@ -81,8 +82,6 @@ format SUMMARY =
 $dev, $rwtime, $iop, $iotime
 .
 
-
-
 our $fmt_stdout = "%-6s "    #dev is right-aligned
   . colorize( "%9.2f %9.2f ", "red" ) . "%9.2f %9.2f "    #iops merged and total
   . colorize( "%9.2f %9.2f %9.2f %9.2f", "blue" )         #time, iops, iotime
@@ -91,33 +90,30 @@ our $fmt_stdout = "%-6s "    #dev is right-aligned
   . colorize( "%9.2f %9.2f", "green" )                    #avg r/w time
   . "\n";
 
-our $fmt_rw_merged    = colorize( "%8.2f %8.2f ", "red" );
-our $fmt_rw_merged_head    = colorize( "%8s %8s ", "red" );
+our $fmt_rw_merged      = colorize( "%8.2f %8.2f ", "red" );
+our $fmt_rw_merged_head = colorize( "%8s %8s ",     "red" );
 
-our $fmt_rw_ops       = "%7.2f %7.2f ";
-our $fmt_rw_ops_head       = "%7s %7s ";
+our $fmt_rw_ops      = "%7.2f %7.2f ";
+our $fmt_rw_ops_head = "%7s %7s ";
 
-our $fmt_avg_rwt_size = colorize( "%8.2f %8.2f %8.2f", "blue" );
-our $fmt_avg_rwt_size_head = colorize( "%8s %8s %8s", "blue" );
+our $fmt_avg_rwt_size      = colorize( "%8.2f %8.2f %8.2f", "blue" );
+our $fmt_avg_rwt_size_head = colorize( "%8s %8s %8s",       "blue" );
 
-our $fmt_avg_rwt_time = colorize( "%9.2f %9.2f %9.2f", "green" );
-our $fmt_avg_rwt_time_head = colorize( "%9s %9s %9s", "green" );
+our $fmt_avg_rwt_time      = colorize( "%9.2f %9.2f %9.2f", "green" );
+our $fmt_avg_rwt_time_head = colorize( "%9s %9s %9s",       "green" );
 
-our $fmt_util         = "%8.2f";
-
-
-
+our $fmt_util = "%8.2f";
 
 #
 # Get Options
 #
 my $result = GetOptions(
-    'i'      => \$iostat_like,    # print iostat-like output
-    'm'      => \$megabytes,         # print merged stats
-	's'      => \$output_in_sectors,         # print size in sectors
+    'i' => \$iostat_like,          # print iostat-like output
+    'm' => \$megabytes,            # print merged stats
+    's' => \$output_in_sectors,    # print size in sectors
 
     'v'      => \$verbose,
-    'h|help' => \$help            # help verbose
+    'h|help' => \$help             # help verbose
 );
 
 usage() if ($help);
@@ -125,14 +121,15 @@ $iostat_like = defined $iostat_like;
 
 $~ = "IOSTAT" if ($iostat_like);
 
-if (defined $megabytes) {
-  $size_factor = 2048;
-} elsif (defined $output_in_sectors) {
-  $size_factor = 1;
-} else {
-  $size_factor = 2;
+if ( defined $megabytes ) {
+    $size_factor = 2048;
 }
-
+elsif ( defined $output_in_sectors ) {
+    $size_factor = 1;
+}
+else {
+    $size_factor = 2;
+}
 
 #
 # Play my game
@@ -244,13 +241,15 @@ while (1) {
                         $w );
 
                     # read write size
-                    printf( $fmt_rw_ops,  $rsec / $size_factor  ,  $wsec / $size_factor );
+                    printf( $fmt_rw_ops,
+                        $rsec / $size_factor,
+                        $wsec / $size_factor );
 
                     # average read write size
                     printf( $fmt_avg_rwt_size,
                         $avg_r_sz / $size_factor,
                         $avg_w_sz / $size_factor,
-                        $avg_sz / $size_factor);
+                        $avg_sz / $size_factor );
 
                     printf( $fmt_avg_rwt_time, $avg_r_tm, $avg_w_tm, $await );
 
@@ -290,32 +289,30 @@ continue {
       await avgqu-sz
     );
 
-    if ( ($ln % $pagination) == 0 ) {
-       if ($iostat_like) {
-		write;
-       
-    } else {
-		printf( "%-6s ", $dev );
+    if ( ( $ln % $pagination ) == 0 ) {
+        if ($iostat_like) {
+            write;
 
-		# read / write stats
-		printf( $fmt_rw_merged_head. $fmt_rw_ops_head, $rrqm, $wrqm, $r,
-			$w );
+        }
+        else {
+            printf( "%-6s ", $dev );
 
-		# read write size
-		printf( $fmt_rw_ops_head , $rsec, $wsec );
+            # read / write stats
+            printf( $fmt_rw_merged_head. $fmt_rw_ops_head,
+                $rrqm, $wrqm, $r, $w );
 
-		# average read write size
-		printf( $fmt_avg_rwt_size_head,
-			$avg_r_sz,
-			$avg_w_sz,
-			$avg_sz );
+            # read write size
+            printf( $fmt_rw_ops_head , $rsec, $wsec );
 
-		printf(  $fmt_avg_rwt_time_head, $avg_r_tm, $avg_w_tm, $await );
+            # average read write size
+            printf( $fmt_avg_rwt_size_head, $avg_r_sz, $avg_w_sz, $avg_sz );
 
-		printf( $fmt_rw_ops_head, $svctm, $util );
-		print "\n";
+            printf( $fmt_avg_rwt_time_head, $avg_r_tm, $avg_w_tm, $await );
+
+            printf( $fmt_rw_ops_head, $svctm, $util );
+            print "\n";
+        }
     }
-}
-  
+
     $ln++;
 }

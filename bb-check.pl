@@ -20,7 +20,7 @@ sub usage() {
 
 # find files referenced in postfix configuration but missing
 # in the current directories
-sub find_missing_files(@) {
+sub find_missing_files(@) {    #files
 
     # pattern used to match configuration files. May not be exhaustive
     our $file_pattern = qq|\\s(/[A-z0-9_][/A-z0-9_.]+[A-z0-9])|;
@@ -61,8 +61,8 @@ sub find_unused_files(@) {    #list of files to check
 
 # check for possible typos in main.cf and master.cf
 sub check_typos(@_) {         #list of files to check
-    my $spaces_before_vars = qq/^\s+[A-z0-9]+=/;
-    my $trailing_comment   = qq/^\s*[A-z].*\s*#/;
+    my $spaces_before_vars = qq/^\\s+[A-z0-9]+=/;
+    my $trailing_comment   = qq/^\\s*[A-z].*\\s*#/;
     foreach my $file (@_) {
         next if ( $file =~ m|/\.\.?$| );
         my $nl = 0, $lno = 1, $err = "";
@@ -81,7 +81,7 @@ sub check_typos(@_) {         #list of files to check
             $err = "";
         }
         close(FH);
-        print "file: $file \t\t\ko$nl lines with syntax errors\n" if ($nl);
+        print "file: $file \t\tko$nl lines with syntax errors\n" if ($nl);
         print "file: $file \t\tok\n" if ( !$nl );
     }
 }
@@ -89,7 +89,7 @@ sub check_typos(@_) {         #list of files to check
 sub main {
     my $postfix_dir = "/etc/postfix";
     my @files       = ();
-    my %options     = {};
+    my %options     = ();
     getopts( "mtuvc:f:", \%options );
 
     usage() if not scalar( keys(%options) );
