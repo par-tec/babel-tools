@@ -65,7 +65,7 @@ our $re_sent =
 qq|($re_header): ($re_qid): to=<($re_mail)>, relay=($re_relay), .* status=($re_status) |;
 our $re_removed = qq|($re_header): ($re_qid): removed|;
 
-our %strip_from_comment = ( '5.7.1' => qq|<.*?>|, '5.1.1' => qq|<.*?>|);
+our %strip_from_comment = ( '5.7.1' => qq|<.*?>|, '5.1.1' => qq|<.*?>| );
 
 #
 # Colorize output
@@ -160,9 +160,10 @@ $date, $from, $to, $qid, $relay, $comment, $server_name
             #
             # Reduce comment length: should be configurable
             #
-            foreach my $p (keys(%strip_from_comment)) {
-			  $comment =~ s|$strip_from_comment{$p}||g if ($comment =~ m|$p|);
-            } 
+            foreach my $p ( keys(%strip_from_comment) ) {
+                $comment =~ s|$strip_from_comment{$p}||g
+                  if ( $comment =~ m|$p| );
+            }
             write;
         }
         elsif ( $_ =~ m/$re_accept/ ) {
@@ -332,9 +333,10 @@ sub usage() {
 "Parse a postfix maillog file, printing a simple table with the following fields:\n";
     print "From To      QId     Relay   Status  Comment\n";
     print "\n";
-    print "Unless -f. comments are shortened using the %strip_from_comment table. You can customize it as you like.";
+    print
+"Unless -f. comments are shortened using the %strip_from_comment table. You can customize it as you like.";
     print "\n";
-	print "Options:";
+    print "Options:";
     print " -t test script\n";
     print " -h print this screen\n";
     print " -n don't print resolved domains, just ip\n";
@@ -360,8 +362,8 @@ sub main() {
         $^ = "DATE_TOP";
     }
     elsif ($full) {
-        $~ = "FULL";
-        $^ = "FULL_TOP";
+        $~                  = "FULL";
+        $^                  = "FULL_TOP";
         %strip_from_comment = ();
     }
 
