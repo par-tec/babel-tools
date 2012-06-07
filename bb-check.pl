@@ -9,12 +9,6 @@
 # - Verify
 #
 
-# && 	# not be comments or empty, and
-#			( 
-#			!/[=,]\s*$/ || 			# be complete lines (eg. don't end with = or , )
-#			#s/^([^#]+[=,])\s*\n/$1/  	# or the join of incomplete lines (eg. if line ends with [=,] join with the upper one
-#			s/^(.+)\n\s+/$1 /ms  	# or the join of incomplete lines (eg. if line ends with [=,] join with the upper one
-#		)
 use strict;
 use diagnostics;
 use Getopt::Std;
@@ -44,26 +38,26 @@ sub find_missing_files(@) {    #files
       qw|\.\.?$ post-install postfix-script postfix-files LICENSE TLS_LICENSE license prng_exch|;
     my $re_skip_files = join( "|", @skip_files );
 
-	my $a;
+    my $a;
 
     foreach my $file (@_) {
         my $errors = 0;
         next if ( $file =~ m|$re_skip_files| );
 
-		# Skip directories
-		next if (-d $file);
+        # Skip directories
+        next if ( -d $file );
 
         open FH, "<", $file;
         printf "Scanning file: %-60s...", $file;
         while (<FH>) {
-            next if ( $_ =~ m/^\s*#/);
+            next if ( $_ =~ m/^\s*#/ );
 
-			#print $_ if ($verbose);
+            #print $_ if ($verbose);
             # match every file, even more files on the same line
             while ( $_ =~ m|$file_pattern|g ) {
                 $a = $1;
-				print "\n\tfile: $a" if ($verbose);
-				
+                print "\n\tfile: $a" if ($verbose);
+
                 # print unexistent files
                 if ( not -e $a ) {
                     $errors++;
@@ -80,15 +74,16 @@ sub find_missing_files(@) {    #files
                 }
 
                 # check perl syntax
-                if ( $a =~ m/.*\.pl$/)  {
-                 if ( not `perl -c -- $a` ) {
-                    $errors++;
-                    printf( "\n\tscript with errors: %60s", $a );
-				  } else {
-					  printf( "\n\tscript syntax ok: %60s", $a);
-				  }
+                if ( $a =~ m/.*\.pl$/ ) {
+                    if ( not `perl -c -- $a` ) {
+                        $errors++;
+                        printf( "\n\tscript with errors: %60s", $a );
+                    }
+                    else {
+                        printf( "\n\tscript syntax ok: %60s", $a );
+                    }
                 }
-                                    next;
+                next;
             }
         }
         close FH;
@@ -219,7 +214,7 @@ sub check_sasl(@) {    # files
     }
     elsif ( -e $dpkg ) {
         foreach my $lib (`$dpkg -l \*sasl\*;`) {
-            next unless ($lib =~ m/^ii\s+([^ ]+)/);
+            next unless ( $lib =~ m/^ii\s+([^ ]+)/ );
             push( @sasl_libs, $1 );
         }
     }
@@ -227,8 +222,8 @@ sub check_sasl(@) {    # files
     if ( @sasl_libs > 0 ) {
         printf "\tSASL packages: %s\n", join( ",", @sasl_libs );
         printf "\tCAVEAT: YOUR POSTFIX MAY NEED OTHER PACKAGES!\n"
-        ."\t\tIf you have issues with SASL please check you have \n"
-        ."\t\tall the required .so libraries\n";
+          . "\t\tIf you have issues with SASL please check you have \n"
+          . "\t\tall the required .so libraries\n";
     }
     else {
         printf "\tcannot determine SASL packages\n";
@@ -240,32 +235,33 @@ sub check_sasl(@) {    # files
 #
 # Uncomment and normalize main.cf
 #
-sub normalize_cf($){ #file to normalize
-	my $re_blank_comments = qq/^\\s*(#|\$)/;
+sub normalize_cf($) {    #file to normalize
+    my $re_blank_comments = qq/^\\s*(#|\$)/;
 
-	my ($file) = @_;
+    my ($file) = @_;
 
-	open (FH, "<", $file) or die ("cannot open file: $file.");
-	
-	# strip blank and comments
-	my @ret = grep { !/$re_blank_comments/  } <FH>;
-	close (FH);
+    open( FH, "<", $file ) or die("cannot open file: $file.");
 
-	#
-	# Join lines starting with blanks with the previous one
-	# 
-	my $p = "";
-	my $c = "";
-	foreach my $line (@ret) {
-	foreach  my $c (split //, $line) {
-		next if ($c eq "\n");
-		print $p if ( ($c !~ m/\s+/)  and ($p eq "\n"));
-		
-		# replace multiple space with a single " "
-		next if ($c =~ '\s' and $p =~ '\s');
-		print ($c =~ '\s' ? " " : $c) ;
-	} continue { $p = $c; }
-}
+    # strip blank and comments
+    my @ret = grep { !/$re_blank_comments/ } <FH>;
+    close(FH);
+
+    #
+    # Join lines starting with blanks with the previous one
+    #
+    my $p = "";
+    my $c = "";
+    foreach my $line (@ret) {
+        foreach my $c ( split //, $line ) {
+            next if ( $c eq "\n" );
+            print $p if ( ( $c !~ m/\s+/ ) and ( $p eq "\n" ) );
+
+            # replace multiple space with a single " "
+            next if ( $c =~ '\s' and $p =~ '\s' );
+            print( $c =~ '\s' ? " " : $c );
+        }
+        continue { $p = $c; }
+    }
 }
 
 sub main {
@@ -279,13 +275,11 @@ sub main {
     $verbose     = ( defined $options{'v'} );
     $postfix_dir = $options{'c'} if ( $options{'c'} );
     @files       = ( $options{'f'} ) if ( $options{'f'} );
-    
-    if (defined $options{'u'}) {
-	normalize_cf($options{'u'});
-	exit(0);
+
+    if ( defined $options{'u'} ) {
+        normalize_cf( $options{'u'} );
+        exit(0);
     }
-    
-	
 
     if ( $#files < 0 ) {
         opendir( DIR, $postfix_dir )
