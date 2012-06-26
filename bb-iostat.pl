@@ -19,8 +19,12 @@ sub colorize($$) {    #string, colorize
     return $ret;
 }
 
-sub usage() {
-    print "usage: $0 interval device pagination [options]\n" . "\n"
+sub usage(@) {
+
+    if ( defined $1 ) {
+        print "Error: $1\n\n";
+    }
+    print "usage: $0 <interval> <device> <pagination> [options]\n" . "\n"
       . "Like iostat but showing some more statistics\n" . "\n"
       . "options:\n"
       . " -i : print data in iostat format\n"
@@ -36,9 +40,9 @@ my ( $interval, $device, $pagination ) = @ARGV;
 my ( $iostat_like, $verbose, $megabytes, $output_in_sectors, $size_factor,
     $help );
 
-die("missing interval")   unless ($interval);
-die("missing device")     unless ($device);
-die("missing pagination") unless ($pagination);
+usage("missing interval")   unless ($interval);
+usage("missing device")     unless ($device);
+usage("missing pagination") unless ($pagination);
 
 # print headers every pagination lines
 my $ln = 0;
@@ -59,8 +63,8 @@ my (
     $rw,       $rwsec,       # computed: total iop and sectors
     $rwtime,   $time,        # computed: total time spent in io, included wait
     $avg_r_tm, $avg_w_tm,    # computed: average times
-    $svctm, $await, $avg_q_sz, $avg_q_tm    # computed: average service times
-
+    $svctm, $await, $avg_q_sz, $avg_q_tm,    # computed: average service times
+    $dirty                                   # dirty buffers
 );
 
 #
@@ -129,6 +133,19 @@ elsif ( defined $output_in_sectors ) {
 }
 else {
     $size_factor = 2;
+}
+
+sub get_dirty_buffers() {
+    my $ret;
+    open( MI, "<", "/proc/meminfo" );
+    while (<MI>) {
+        if (m/Dirty.*:\s*([0-9]+ kB)/) {
+            $ret = $1;
+            last;
+        }
+    }
+    close(MI);
+    return $ret;
 }
 
 #
@@ -213,6 +230,8 @@ while (1) {
             $iotime     *= 1;
             $avg_iotime *= 1;
 
+            my $dirty = get_dirty_buffers();
+
             if ( $r >= 0 ) {
 
                 #
@@ -254,6 +273,8 @@ while (1) {
                     printf( $fmt_avg_rwt_time, $avg_r_tm, $avg_w_tm, $await );
 
                     printf( $fmt_rw_ops, $svctm, $util );
+
+                    printf($dirty);
                     print "\n";
 
            #                 printf( $fmt_stdout,
@@ -278,7 +299,8 @@ continue {
         $rrqm,     $rsec,   $rtime,    $w,        $wrqm,
         $wsec,     $wtime,  $rwtime,   $iotime,   $avg_iotime,
         $util,     $avg_sz, $avg_r_sz, $avg_w_sz, $avg_r_tm,
-        $avg_w_tm, $svctm,  $avg_q_tm, $await,    $avg_q_sz
+        $avg_w_tm, $svctm,  $avg_q_tm, $await,    $avg_q_sz,
+        $dirty
       )
       = qw(a b c dev
       r rrqm rsec rtime
@@ -286,7 +308,7 @@ continue {
       ttime iotime avg_iotime
       util avg_sz avg_r_sz avg_w_sz
       avg_r_tm agv_w_tm svctm avgqu-tm
-      await avgqu-sz
+      await avgqu-sz dirty
     );
 
     if ( ( $ln % $pagination ) == 0 ) {
@@ -310,6 +332,8 @@ continue {
             printf( $fmt_avg_rwt_time_head, $avg_r_tm, $avg_w_tm, $await );
 
             printf( $fmt_rw_ops_head, $svctm, $util );
+
+            printf($dirty);
             print "\n";
         }
     }
