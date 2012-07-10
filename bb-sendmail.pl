@@ -19,7 +19,7 @@ sub dprint($) {
 
 sub usage() {
     print
-"Usage: $0 -s server:port -f from -t to -c cc -b bcc -m message -a auth_type -u user -p pass -S subject -d data_file\n"
+"Usage: $0 -s server:port -f from -t to -c cc -b bcc -m message -a auth_type -u user -p pass -j subject -d data_file\n"
       . "\n"
       . "Send an email using the given parameters\n"
       . "  -h print this screen\n"
