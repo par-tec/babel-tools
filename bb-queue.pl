@@ -11,11 +11,13 @@ use diagnostics;
 use HTTP::Date;
 use Getopt::Long;
 use Data::Dumper;
+use POSIX qw/ strftime /;
+use File::Temp qw/ tempfile /;
 
 my $verbose = 0;
 
 sub dprint($) {
-    print shift if $verbose;
+    print STDERR shift if $verbose;
 }
 
 sub usage(@) {
@@ -64,6 +66,8 @@ my $re_from       = qq|[^ ]+|;
 my $re_date       = qq|\\w{3}\\s+\\w{3}\\s+\\d+\\s+\\d+:\\d+:\\d+|;
 my $re_postqueue =
   qq|($re_qid)($re_queue_type?)\\s+($re_size)\\s+($re_date)\\s+($re_from)|;
+
+my $fmt_datetime = "%d-%m-%Y %H:%M:%S";
 
 #
 # parser function
@@ -124,27 +128,84 @@ sub parser($) {    #file handle
     return \%count;
 }
 
+sub gnuplot_header($) {    # tmpfile
+    my $tmpfile = shift;
+
+    return 'set xlabel "time"
+set key outside bottom
+set ylabel "%"
+set autoscale
+set grid
+set xdata time
+set format x "%H:%M"
+set timefmt "' . $fmt_datetime . '"
+set ylabel "items"
+set title "queue"
+set style fill solid 2.0  border -2
+
+set log y
+
+'
+
+      # qw/ total active size delta tput usage Bps /
+      . 'plot "' 
+      . $tmpfile
+      . '" using 1:3 title "tot" with boxes, ' . '"'
+      . $tmpfile
+      . '" using 1:4 title "active" with boxes, ' . '"'
+      . $tmpfile
+      . '" using 1:5 title "size" with lines, ' . '"'
+      . $tmpfile
+      . '" using 1:7 title "mail/s" with lines, '
+
+      #  .'"'.$tmpfile.'" using 1:9 title "kps" with lines, '
+      . '"' . $tmpfile . '" using 1:8 title "qusage" with lines ';
+
+}
+
 sub main() {
     my ( $argc, @argv ) = ( $#ARGV, @ARGV );
     my $que;
     my $i = 0;
-    my ( $help, $queue, $test );
-    my ( $interval, $pagination, $domain ) = ( 5, 24, 0 );
+    my ( $help, $queue, $test, $gnuplot, $tmpfile );
+    my ( $interval, $pagination, $domain, $outfile_fh ) = ( 5, 24, 0, *STDOUT );
+    my $fmt_data = "%-10d\t%10d\t%12.2f\t%20d\t%18.2f\t%3.2f\t%8d\n";
 
     my $result = GetOptions(
-        'i=s' => \$interval,     # server options
-        'q=s' => \$queue,
-        'p=s' => \$pagination,
-        't'   => \$test,
-        'v'   => \$verbose,
-        'd'   => \$domain,
+        'i=s'       => \$interval,     # server options
+        'q=s'       => \$queue,
+        'p=s'       => \$pagination,
+        't'         => \$test,
+        'v'         => \$verbose,
+        'd'         => \$domain,
+        'g|gnuplot' => \$gnuplot,
 
-        'h|help' => \$help       # help verbose
+        'h|help' => \$help             # help verbose
     );
 
     test() if defined $test;
 
     usage() if ( $help or $argc < 1 );
+
+    if ( defined $gnuplot ) {
+
+        # we're going to fork, man!
+        $SIG{CHLD} = 'IGNORE';
+
+        ( $outfile_fh, $tmpfile ) =
+          tempfile( "/tmp/bb-queue-gnuplot.XXXXXX", UNLINK => 1 );
+        dprint( "tmpfile: " . $tmpfile );
+
+        printf $outfile_fh "%s " . $fmt_data,
+          (
+            strftime( $fmt_datetime, localtime() ),
+            qw/ 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0/
+          );
+        my $cmd = "echo '" . gnuplot_header($tmpfile) . "' | gnuplot -p";
+        dprint( "gnuplot cmd: " . $cmd );
+        system($cmd );
+
+    }
 
     my $command = sprintf("$postqueue -p ");
     my %curr    = %count_template;
@@ -158,18 +219,25 @@ sub main() {
         my $speed =
           $prev{'total'} ? ( $curr{'total'} - $prev{'total'} ) / $interval : 0;
 
-        my $usage =
+        my $usg =
           $curr{'wait_time'} ? $curr{'usage_time'} / $curr{'wait_time'} : 0;
 
-        printf(
-            "%-10s\t%10s\t%20s\t%20s\t%20s\t%5s\t%8s\n",
-            'total',   'active', 'size', 'delta',
-            'thruput', 'usage',  'Bps_thruput'
-        ) if ( !( $i++ % $pagination ) );
+        if ( undef($gnuplot) and !( $i++ % $pagination ) ) {
+            printf $outfile_fh ( "%-20s", 'time' ) if ( defined $gnuplot );
+            printf $outfile_fh (
+                "%-10s\t%10s\t%20s\t%20s\t%20s\t%5s\t%8s\n",
+                qw/ total active size delta tput usage Bps /
+            );
+        }
 
-        printf( "%-10d\t%10d\t%20d\t%20d\t%18.2f\t%3.2f\t%8d\n",
-            $curr{'total'}, $curr{'active'}, $curr{'size'}, $curr{'wait_time'},
-            $curr{'thruput'}, $usage, $curr{'Bps_thruput'}, );
+        printf $outfile_fh "%-20s", strftime( $fmt_datetime, localtime() );
+
+        printf $outfile_fh
+          $fmt_data,
+          $curr{'total'}, $curr{'active'}, $curr{'size'} / 1000,
+          $curr{'wait_time'},
+          $curr{'thruput'}, $usg, $curr{'Bps_thruput'},
+          ;
 
         # from qSummary.pl
         if ($domain) {
@@ -179,7 +247,7 @@ sub main() {
                 keys %domains
               )
             {
-                print "\t\t$key\t$domains{$key}\n";
+                print $outfile_fh "\t\t$key\t$domains{$key}\n";
             }
         }
         sleep($interval);
