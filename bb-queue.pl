@@ -1,4 +1,10 @@
 #!/usr/bin/perl -w
+#
+# GPLv3 - (c) Babel srl www.babel.it
+#
+# Author: rpolli@babel.it
+#
+
 
 #
 # Print some simple queue statistics

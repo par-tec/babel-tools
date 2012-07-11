@@ -1,4 +1,10 @@
 #!/usr/bin/perl -w
+#
+# GPLv3 - (c) Babel srl www.babel.it
+#
+# Author: rpolli@babel.it
+#
+
 # a simple iostat replacement returning some more statistics
 use strict;
 use diagnostics;
