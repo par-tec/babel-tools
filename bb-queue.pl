@@ -143,7 +143,6 @@ set ylabel "items"
 set title "queue"
 set style fill solid 2.0  border -2
 
-set log y
 
 '
 
