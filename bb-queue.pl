@@ -25,18 +25,20 @@ sub usage(@) {
     if ( defined $1 ) {
         print "Error: $1\n\n";
     }
-    die "usage: $0 -i <interval> -q <queue> -p <pagination> [options]\n" . "\n"
+    print "usage: $0 -i <interval> -q <queue> -p <pagination> [options]\n" . "\n"
       . "Parses postqueue output printing some statistics\n" . "\n"
       . "options:\n"
       . " -i : interval between two checks\n"
       . " -p : print header every p lines\n"
-      . " -q : check only a given queue\n"
+#\TODO      . " -q : check only a given queue\n"
       . " -h : this help\n"
       . " -t : test parser\n"
       . " -v : a bit of debugging output\n"
+      . " -g : create a gnuplot graph. Just refresh to see the data\n"
 
       . "\n";
 
+    exit(1);
 }
 
 my $postqueue = "/usr/sbin/postqueue";
@@ -140,9 +142,10 @@ set xdata time
 set format x "%H:%M"
 set timefmt "' . $fmt_datetime . '"
 set ylabel "items"
-set title "queue"
+set title "Postfix Queue Stats"
 set style fill solid 2.0  border -2
 
+set log y
 
 '
 
@@ -186,6 +189,9 @@ sub main() {
 
     usage() if ( $help or $argc < 1 );
 
+	#
+	# output data to a tmpfile and run gnuplot
+	#
     if ( defined $gnuplot ) {
 
         # we're going to fork, man!
@@ -198,12 +204,13 @@ sub main() {
         printf $outfile_fh "%s " . $fmt_data,
           (
             strftime( $fmt_datetime, localtime() ),
-            qw/ 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0/
+            qw/ 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1/
           );
         my $cmd = "echo '" . gnuplot_header($tmpfile) . "' | gnuplot -p";
         dprint( "gnuplot cmd: " . $cmd );
         system($cmd );
 
+		print STDERR "Hey man, just REFRESH your graph to see the data!\n";
     }
 
     my $command = sprintf("$postqueue -p ");
@@ -249,6 +256,7 @@ sub main() {
                 print $outfile_fh "\t\t$key\t$domains{$key}\n";
             }
         }
+        close($que);
         sleep($interval);
     }
 

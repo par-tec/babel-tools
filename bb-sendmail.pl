@@ -24,6 +24,7 @@ sub usage() {
       . "Send an email using the given parameters\n"
       . "  -h print this screen\n"
       . "  -v verbosely dump smtp session\n"
+      . "  -i send i-times the same email on the same connection\n"
       . "  -s smtp server - eg. mx.babel.it:25\n"
       . "  -e EHLO string\n"
       . "  -f sender - set MAIL FROM\n"
