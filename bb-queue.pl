@@ -10,6 +10,7 @@ use diagnostics;
 
 use HTTP::Date;
 use Getopt::Long;
+use Data::Dumper;
 
 my $verbose = 0;
 
@@ -22,8 +23,7 @@ sub usage(@) {
     if ( defined $1 ) {
         print "Error: $1\n\n";
     }
-    print "usage: $0 -i <interval> -q <queue> -p <pagination> [options]\n"
-      . "\n"
+    die "usage: $0 -i <interval> -q <queue> -p <pagination> [options]\n" . "\n"
       . "Parses postqueue output printing some statistics\n" . "\n"
       . "options:\n"
       . " -i : interval between two checks\n"
@@ -31,15 +31,16 @@ sub usage(@) {
       . " -q : check only a given queue\n"
       . " -h : this help\n"
       . " -t : test parser\n"
+      . " -v : a bit of debugging output\n"
 
       . "\n";
-    exit 1;
+
 }
 
 my $postqueue = "/usr/sbin/postqueue";
 
 # Results
-my %count = (
+my %count_template = (
     'total'  => 0,
     'active' => 0,
     'hold'   => 0,
@@ -48,10 +49,10 @@ my %count = (
     'first' => time(),
     'last'  => time(),
 
-    'wait_time'    => 0,
-    'unload_time'  => 0,
-    'arrival_rate' => 0,
-    'domains'      => { 'localhost' => 0}
+    'wait_time'  => 0,
+    'usage_time' => 0,
+    'thruput'    => 0,
+    'domains'    => { 'localhost' => 0 }
 
 );
 
@@ -68,7 +69,12 @@ my $re_postqueue =
 # parser function
 #
 sub parser($) {    #file handle
-    my $que = shift;
+    my $que   = shift;
+    my %count = %count_template;
+    $count_template{'first'} = time();
+    $count_template{'last'}  = time();
+
+    print Dumper(%count) if ($verbose);
     while (<$que>) {
         chomp;
         if ( $_ =~ m/$re_postqueue/ ) {
@@ -78,8 +84,8 @@ sub parser($) {    #file handle
             next unless defined $2;
 
             # Get queue type
-            $count{'active'}++ if ( $2 == "*" );
-            $count{'hold'}++   if ( $2 == "!" );
+            $count{'active'}++ if ( $2 eq "*" );
+            $count{'hold'}++   if ( $2 eq "!" );
 
             # get mail size
             $count{'size'} += $3 if defined $3;
@@ -99,17 +105,21 @@ sub parser($) {    #file handle
     }
 
     #
-    # Should be now, but in a real MTA has always an
-    #  incoming mail
+    # wait_time - time elapsed since which the queue is used
+    # usage_time - time interval in which the queue received items
     #
-    $count{'wait_time'}   = time() - $count{'first'};
-    $count{'unload_time'} = time() - $count{'last'};
+    $count{'wait_time'}  = time() - $count{'first'};
+    $count{'usage_time'} = $count{'last'} - $count{'first'};
 
     #
     # Little's Law: QueueLength = Thruput * WaitTime
+    #  the same for the size
     #
-    $count{'arrival_rate'} =
+    $count{'thruput'} =
       $count{'wait_time'} > 0 ? $count{'total'} / $count{'wait_time'} : 0;
+
+    $count{'Bps_thruput'} =
+      $count{'wait_time'} > 0 ? $count{'size'} / $count{'wait_time'} : 0;
 
     return \%count;
 }
@@ -119,13 +129,15 @@ sub main() {
     my $que;
     my $i = 0;
     my ( $help, $queue, $test );
-    my ( $interval, $pagination ) = ( 5, 24 );
+    my ( $interval, $pagination, $domain ) = ( 5, 24, 0 );
 
     my $result = GetOptions(
         'i=s' => \$interval,     # server options
         'q=s' => \$queue,
         'p=s' => \$pagination,
         't'   => \$test,
+        'v'   => \$verbose,
+        'd'   => \$domain,
 
         'h|help' => \$help       # help verbose
     );
@@ -135,39 +147,53 @@ sub main() {
     usage() if ( $help or $argc < 1 );
 
     my $command = sprintf("$postqueue -p ");
+    my %curr    = %count_template;
+    my %prev;
     while (1) {
         open( $que, "$postqueue -p |" ) or die $!;
-        my $h_count = parser($que);
-        my %count   = %{$h_count};
+        my $h_curr = parser($que);
+        %prev = %curr;
+        %curr = %{$h_curr};
 
-        printf( "%-10s\t%10s\t%20s\t%20s\t%20s\n",
-            'total', 'active', 'size', 'delta', 'thruput' )
-          if ( !( $i++ % $pagination ) );
+        my $speed =
+          $prev{'total'} ? ( $curr{'total'} - $prev{'total'} ) / $interval : 0;
+
+        my $usage =
+          $curr{'wait_time'} ? $curr{'usage_time'} / $curr{'wait_time'} : 0;
 
         printf(
-            "%-10d\t%10d\t%20d\t%20d\t%18.2f\n",
-            $count{'total'}, $count{'active'},
-            $count{'size'},  $count{'wait_time'},
-            $count{'arrival_rate'}
-        );
+            "%-10s\t%10s\t%20s\t%20s\t%20s\t%5s\t%8s\n",
+            'total',   'active', 'size', 'delta',
+            'thruput', 'usage',  'Bps_thruput'
+        ) if ( !( $i++ % $pagination ) );
+
+        printf( "%-10d\t%10d\t%20d\t%20d\t%18.2f\t%3.2f\t%8d\n",
+            $curr{'total'}, $curr{'active'}, $curr{'size'}, $curr{'wait_time'},
+            $curr{'thruput'}, $usage, $curr{'Bps_thruput'}, );
 
         # from qSummary.pl
-        my %domains = %{ $count{'domains'} };
-        foreach my $key ( reverse sort { $domains{$a} <=> $domains{$b} }
-            keys %domains )
-        {
-            print "\t\t$key\t$domains{$key}\n";
+        if ($domain) {
+            my %domains = %{ $curr{'domains'} };
+            foreach my $key (
+                reverse sort { $domains{$a} <=> $domains{$b} }
+                keys %domains
+              )
+            {
+                print "\t\t$key\t$domains{$key}\n";
+            }
         }
-
         sleep($interval);
     }
 
 }
 
+#
+# Tests
+#
 sub test() {
 
     sub test_hash_1() {
-        my %domains = %{ $count{'domains'} };
+        my %domains = %{ $count_template{'domains'} };
 
         my @keys = keys %domains;
         die("domains") if ( not @keys );
