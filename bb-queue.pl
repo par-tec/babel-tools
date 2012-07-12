@@ -5,7 +5,6 @@
 # Author: rpolli@babel.it
 #
 
-
 #
 # Print some simple queue statistics
 #
@@ -31,18 +30,19 @@ sub usage(@) {
     if ( defined $1 ) {
         print "Error: $1\n\n";
     }
-    print "usage: $0 -i <interval> -q <queue> -p <pagination> [options]\n" . "\n"
+    print "usage: $0 -i <interval> -q <queue> -p <pagination> [options]\n"
+      . "\n"
       . "Parses postqueue output printing some statistics\n" . "\n"
       . "options:\n"
       . " -i : interval between two checks\n"
       . " -p : print header every p lines\n"
-#\TODO      . " -q : check only a given queue\n"
+
+      #\TODO      . " -q : check only a given queue\n"
       . " -h : this help\n"
-      . " -t : test parser\n"
+      . " -t : print timestamp\n"
       . " -v : a bit of debugging output\n"
       . " -g : create a gnuplot graph. Just refresh to see the data\n"
-
-      . "\n";
+      . " --test : test parser\n" . "\n";
 
     exit(1);
 }
@@ -59,7 +59,13 @@ my %count_template = (
     'first' => time(),
     'last'  => time(),
 
-    'wait_time'  => 0,
+    # active queue info
+    'active_size'  => 0,
+    'active_first' => time(),
+    'active_last'  => time(),
+
+    'wtime'      => 0,
+    'avg_wtime'  => 0,
     'usage_time' => 0,
     'thruput'    => 0,
     'domains'    => { 'localhost' => 0 }
@@ -77,10 +83,16 @@ my $re_postqueue =
 
 my $fmt_datetime = "%d-%m-%Y %H:%M:%S";
 
+sub safe_div($$) {    # numerator, denominator
+    my $n = shift;
+    my $d = shift;
+    return ( $d > 0 ) ? ( $n / $d ) : 0;
+}
+
 #
 # parser function
 #
-sub parser($) {    #file handle
+sub parser($) {       #file handle
     my $que   = shift;
     my %count = %count_template;
     $count_template{'first'} = time();
@@ -96,8 +108,15 @@ sub parser($) {    #file handle
             next unless defined $2;
 
             # Get queue type
-            $count{'active'}++ if ( $2 eq "*" );
-            $count{'hold'}++   if ( $2 eq "!" );
+            if ( $qtype eq "*" ) {
+                $count{'active'}++;
+            }
+            elsif ( $qtype eq "!" ) {
+                $count{'hold'}++;
+            }
+            else {
+                $count{'deferred'}++;
+            }
 
             # get mail size
             $count{'size'} += $3 if defined $3;
@@ -106,6 +125,17 @@ sub parser($) {    #file handle
             my $t = str2time($4);
             $count{'first'} = ( $count{'first'} < $t ) ? $count{'first'} : $t;
             $count{'last'}  = ( $count{'last'} > $t )  ? $count{'last'}  : $t;
+            $count{'avg_wtime'} += time() - $t;
+
+            # Active queue stats
+            if ( $qtype eq "*" ) {
+                $count{'active_first'} =
+                  ( $count{'first'} < $t ) ? $count{'first'} : $t;
+                $count{'active_last'} =
+                  ( $count{'last'} > $t ) ? $count{'last'} : $t;
+                $count{'active_avg_wtime'} += time() - $t;
+                $count{'active_size'} += $size;
+            }
 
             # get domain stats
             if ( defined $from ) {
@@ -117,88 +147,110 @@ sub parser($) {    #file handle
     }
 
     #
-    # wait_time - time elapsed since which the queue is used
+    # Average time in queues
+    #
+    $count{'avg_wtime'} = safe_div( $count{'avg_wtime'}, $count{'total'} );
+    $count{'active_avg_wtime'} =
+      safe_div( $count{'active_avg_wtime'}, $count{'active'} );
+
+    #
+    # wtime - time elapsed since which the queue is used
     # usage_time - time interval in which the queue received items
     #
-    $count{'wait_time'}  = time() - $count{'first'};
-    $count{'usage_time'} = $count{'last'} - $count{'first'};
+    $count{'wtime'}        = time() - $count{'first'};
+    $count{'usage_time'}   = $count{'last'} - $count{'first'};
+    $count{'active_wtime'} = time() - $count{'active_first'};
 
     #
     # Little's Law: QueueLength = Thruput * WaitTime
     #  the same for the size
     #
-    $count{'thruput'} =
-      $count{'wait_time'} > 0 ? $count{'total'} / $count{'wait_time'} : 0;
+    $count{'mps'} = safe_div( $count{'total'}, $count{'wtime'} );
 
-    $count{'Bps_thruput'} =
-      $count{'wait_time'} > 0 ? $count{'size'} / $count{'wait_time'} : 0;
+    $count{'Bps'}        = safe_div( $count{'size'},   $count{'wtime'} );
+    $count{'active_mps'} = safe_div( $count{'active'}, $count{'active_wtime'} );
+    $count{'active_Bps'} =
+      safe_div( $count{'active_size'}, $count{'active_wtime'} );
 
     return \%count;
 }
 
 sub gnuplot_header($) {    # tmpfile
     my $tmpfile = shift;
-
-    return 'set xlabel "time"
+    my $ret     = <<END
+	
+f = "$tmpfile"
+set xlabel "time"
 set key outside bottom
 set ylabel "%"
 set autoscale
 set grid
 set xdata time
 set format x "%H:%M"
-set timefmt "' . $fmt_datetime . '"
+set timefmt "$fmt_datetime"
 set ylabel "items"
 set title "Postfix Queue Stats"
-set style fill solid 2.0  border -2
+set style fill solid 0.5 border
 
 set log y
 
-'
+plot f using 1:3 title "tot" with boxes lc 1,   \\
+  f using 1:4 title "active" with boxes,   \\
+  f using 1:5 title "KB" with lines,       \\
+  f using 1:7 title "mps" with lines lw 2,   \\
+  f using 1:11 title "mps*" with lines lw 2,   \\
+  f using 1:8 title "qusage" with lines, \\
+  f using 1:9 title "KBps" with lines lw 2, \\
+  f using 1:12 title "KBps*" with lines lw 2 \\
 
-      # qw/ total active size delta tput usage Bps /
-      . 'plot "' 
-      . $tmpfile
-      . '" using 1:3 title "tot" with boxes, ' . '"'
-      . $tmpfile
-      . '" using 1:4 title "active" with boxes, ' . '"'
-      . $tmpfile
-      . '" using 1:5 title "size" with lines, ' . '"'
-      . $tmpfile
-      . '" using 1:7 title "mail/s" with lines, '
+END
+      ;
 
-      #  .'"'.$tmpfile.'" using 1:9 title "kps" with lines, '
-      . '"' . $tmpfile . '" using 1:8 title "qusage" with lines ';
-
+    return $ret;
 }
 
 sub main() {
     my ( $argc, @argv ) = ( $#ARGV, @ARGV );
     my $que;
     my $i = 0;
-    my ( $help, $queue, $test, $gnuplot, $tmpfile );
+    my ( $help, $queue, $test, $gnuplot, $tmpfile, $time );
     my ( $interval, $pagination, $domain, $outfile_fh ) = ( 5, 24, 0, *STDOUT );
-    my $fmt_data = "%-10d\t%10d\t%12.2f\t%20d\t%18.2f\t%3.2f\t%8d\n";
+
+    my @fields =
+      qw|total active KB     delay mps  usg   KBps  avg_wtime tput*  KBps*|;
+    my @fmt_fields_data =
+      qw|%-5d  %5d    %12.2f %6d   %5.2f   %3.2f %8.2f %8.2f     %5.2f  %5.2f|;
+    my @fmt_fields_head =
+      qw|%-5s  %5s    %12s   %6s   %5s     %3s   %8s   %8s       %5s    %5s|;
+
+    my $fmt_data = join( "\t", @fmt_fields_data ) . "\n";
+    my $fmt_head = join( "\t", @fmt_fields_head ) . "\n";
 
     my $result = GetOptions(
-        'i=s'       => \$interval,     # server options
-        'q=s'       => \$queue,
-        'p=s'       => \$pagination,
-        't'         => \$test,
+        'i=s'  => \$interval,     # server options
+        'q=s'  => \$queue,
+        'p=s'  => \$pagination,
+        'test' => \$test,
+        't'    => \$time,
+
         'v'         => \$verbose,
         'd'         => \$domain,
         'g|gnuplot' => \$gnuplot,
 
-        'h|help' => \$help             # help verbose
+        'h|help' => \$help        # help verbose
     );
 
     test() if defined $test;
 
     usage() if ( $help or $argc < 1 );
 
-	#
-	# output data to a tmpfile and run gnuplot
-	#
+    #
+    # output data to a tmpfile and run gnuplot
+    #
     if ( defined $gnuplot ) {
+
+        # gnuplot requires tracing time
+        $time = 1;
 
         # we're going to fork, man!
         $SIG{CHLD} = 'IGNORE';
@@ -216,7 +268,7 @@ sub main() {
         dprint( "gnuplot cmd: " . $cmd );
         system($cmd );
 
-		print STDERR "Hey man, just REFRESH your graph to see the data!\n";
+        print STDERR "Hey man, just REFRESH your graph to see the data!\n";
     }
 
     my $command = sprintf("$postqueue -p ");
@@ -231,24 +283,24 @@ sub main() {
         my $speed =
           $prev{'total'} ? ( $curr{'total'} - $prev{'total'} ) / $interval : 0;
 
-        my $usg =
-          $curr{'wait_time'} ? $curr{'usage_time'} / $curr{'wait_time'} : 0;
+        my $usg = safe_div( $curr{'usage_time'}, $curr{'wtime'} );
 
-        if ( undef($gnuplot) and !( $i++ % $pagination ) ) {
-            printf $outfile_fh ( "%-20s", 'time' ) if ( defined $gnuplot );
-            printf $outfile_fh (
-                "%-10s\t%10s\t%20s\t%20s\t%20s\t%5s\t%8s\n",
-                qw/ total active size delta tput usage Bps /
-            );
+        # gnuplot does not want headers
+        if ( not defined($gnuplot) and !( $i++ % $pagination ) ) {
+            printf $outfile_fh ( "%-22s", 'time' ) if ( defined $time );
+            printf $outfile_fh ( $fmt_head, @fields );
         }
 
-        printf $outfile_fh "%-20s", strftime( $fmt_datetime, localtime() );
+        printf $outfile_fh "%-22s", strftime( $fmt_datetime, localtime() )
+          if ( defined $time );
 
         printf $outfile_fh
           $fmt_data,
           $curr{'total'}, $curr{'active'}, $curr{'size'} / 1000,
-          $curr{'wait_time'},
-          $curr{'thruput'}, $usg, $curr{'Bps_thruput'},
+          $curr{'wtime'},
+          $curr{'mps'}, $usg, $curr{'Bps'} / 1000,
+          $curr{'avg_wtime'},
+          $curr{'active_mps'}, $curr{'active_Bps'} / 1000,
           ;
 
         # from qSummary.pl
