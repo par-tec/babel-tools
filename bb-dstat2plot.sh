@@ -28,7 +28,6 @@ gendata(){
   kill $! >/dev/null 2>&1
   #Remove the headers
   sed '/^"/ D; /^$/ D; s/,/ /g' dstat.csv > stat.dat
-  #sed '1,2d;s/|/ /g' dstat.dat > stat.dat
 }
 
 #############################################
