@@ -19,7 +19,7 @@ setdir(){
 gendata(){
   echo "Collecting stats for ${count} count with an interval of ${interval} sec"
   
-  dstat -tcnmdl --output dstat.csv $interval $count | tee dstat.dat
+  dstat -tcnmdls --output dstat.csv $interval $count | tee dstat.dat
   [ "$?" -ne 0 ] && echo "Please check if you have installed dstat" && exit 1
   
   wait
@@ -27,7 +27,8 @@ gendata(){
   
   kill $! >/dev/null 2>&1
   #Remove the headers
-  sed '1,2d;s/|/ /g' dstat.dat > stat.dat
+  sed '/^"/ D; /^$/ D; s/,/ /g' dstat.csv > stat.dat
+  #sed '1,2d;s/|/ /g' dstat.dat > stat.dat
 }
 
 #############################################
@@ -42,7 +43,7 @@ set title $title
 set xlabel $xlabel
 set xdata time
 set ylabel $ylabel
-set timefmt "%d-%m %H:%M:%S|"
+set timefmt "%d-%m %H:%M:%S "
 set format x "%H:%M:%S"
 set xtics rotate autofreq
 plot ${plot[*]}
@@ -69,9 +70,9 @@ plotmem(){
   output='"memory.png"'
   title='"Memory usage"'
   xlabel='"time"'
-  ylabel='"size(Mb)"'
+  ylabel='"size(MB)"'
 
-  plot=( '"stat.dat"' using 1:11 title '"used"' with lines,'"stat.dat"' using 1:12 title '"buff"' with lines, '"stat.dat"' using 1:13 title '"cach"' with lines,'"stat.dat"' using 1:14 title '"free"' with lines )
+  plot=( '"stat.dat"' using 1:\(\$11/1000000\) title '"used"' with lines,'"stat.dat"' using 1:\(\$12/1000000\) title '"buff"' with lines, '"stat.dat"' using 1:\(\$13/1000000\) title '"cach"' with lines,'"stat.dat"' using 1:\(\$14/1000000\) title '"free"' with lines )
 
   graph
 }
@@ -82,9 +83,9 @@ plotnet(){
   output='"network.png"'
   title='"Network usage"'
   xlabel='"time"'
-  ylabel='"size(k)"'
+  ylabel='"size(KB)"'
 
-  plot=( '"stat.dat"' using 1:9 title '"recv"' with lines,'"stat.dat"' using 1:10 title '"send"' with lines )
+  plot=( '"stat.dat"' using 1:\(\$9/1000\) title '"recv"' with lines,'"stat.dat"' using 1:\(\$10/1000\) title '"send"' with lines )
 
   graph
 
@@ -96,9 +97,9 @@ plotdisk(){
   output='"disk.png"'
   title='"Disk usage"'
   xlabel='"time"'
-  ylabel='"size(k)"'
+  ylabel='"size(KB)"'
 
-  plot=( '"stat.dat"' using 1:15 title '"read"' with lines,'"stat.dat"' using 1:16 title '"writ"' with lines )
+  plot=( '"stat.dat"' using 1:\(\$15/1000\) title '"read"' with lines,'"stat.dat"' using 1:\(\$16/1000\) title '"writ"' with lines )
 
   graph
 
@@ -118,6 +119,20 @@ plotload(){
 
 }
 
+# Plot swap usage
+plotswap(){
+  fileType="png"
+  output='"swap.png"'
+  title='"Swap usage"'
+  xlabel='"time"'
+  ylabel='"size(MB)"'
+
+  plot=( '"stat.dat"' using 1:\(\$20/1000000\) title '"used"' with lines,'"stat.dat"' using 1:\(\$21/1000000\) title '"free"' with lines )
+
+  graph
+
+}
+
 # Clean up all the collected stats
 clean(){
   echo "Cleaning"
@@ -127,15 +142,16 @@ clean(){
 }
 
 # Loop for different options
-while getopts "hamncdlC:I:D:" opt; do
+while getopts "hamncdlsC:I:D:" opt; do
   case "$opt" in
     h) show_help; exit 0;;
-    a) args=$args"mncdl" ;;
+    a) args=$args"mncdls" ;;
     m) args=$args"m" ;;
     n) args=$args"n" ;;
     c) args=$args"c" ;;
     d) args=$args"d" ;;
     l) args=$args"l" ;;
+    s) args=$args"s" ;;
     C) count=$OPTARG ;;
     I) interval=$OPTARG ;;
     D) directory=$OPTARG ;;
@@ -169,5 +185,8 @@ echo $args | grep -q "d" --
   
 echo $args | grep -q "l" --
 [ "$?" -eq 0 ] && plotload
+
+echo $args | grep -q "s" --
+[ "$?" -eq 0 ] && plotswap
   
 exit 0
