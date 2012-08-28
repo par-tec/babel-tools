@@ -8,6 +8,7 @@
 #
 use strict;
 use Net::SMTP;
+use Net::SMTP::SSL;
 use Getopt::Long;
 use MIME::Base64;
 
@@ -19,13 +20,13 @@ sub dprint($) {
 
 sub usage() {
     die
-"Usage: $0 -s server:port -f from -t to -c cc -b bcc -m message -a auth_type -u user -p pass -j subject -d data_file\n"
+"Usage: $0 -s server:port -f from -t to -c cc -b bcc -m message -a auth_type -u user -p pass -j subject -n attachment -d data_file\n"
       . "\n"
       . "Send an email using the given parameters\n"
       . "  -h print this screen\n"
       . "  -v verbosely dump smtp session\n"
       . "  -i send i-times the same email on the same connection\n"
-      . "  -s smtp server - eg. mx.babel.it:25\n"
+      . "  -s smtp server - eg. mx.babel.it:25, smtps:msa.babel.it:465\n"
       . "  -e EHLO string\n"
       . "  -f sender - set MAIL FROM\n"
       . "  -t recipient - set RCPT TO\n"
@@ -151,7 +152,7 @@ sub main() {
     my @bcc    = ();
     my $help;
 
-    my ( $server, $port ) = qw/localhost 25/;
+    my ( $proto, $server, $port ) = qw/smtp localhost 25/;
     my (
         $sender,       $recipient,   $cc,       $bcc,
         $auth_type,    $username,    $password, $subject,
@@ -184,7 +185,12 @@ sub main() {
         @notify = qw/SUCCESS FAILURE DELAY/;
     }
 
-    ( $server, $port ) = split( /:/, $server ) if ($server);
+    if ( $server =~ /^smtps:/ ) {
+        ( $proto, $server, $port ) = split( /:/, $server );
+    }
+    else {
+        ( $server, $port ) = split( /:/, $server ) if ($server);
+    }
 
     #validate input parameters
     die("Missing SMTP host or port: use -s server:port")
@@ -222,11 +228,22 @@ sub main() {
     #
     # Create the mailer class
     #
-    my $mailer = Net::SMTP->new(
-        $server,
-        Port  => $port,
-        Debug => $verbose
-    ) or die("Can't create mailer object to $server:$port.");
+    my $mailer;
+    if ( $proto eq "smtps" ) {
+        $mailer = Net::SMTP::SSL->new(
+            $server,
+            Port  => $port,
+            Debug => $verbose
+        ) or die("Can't create mailer object to $server:$port.");
+    }
+    else {
+        $mailer = Net::SMTP->new(
+            $server,
+            Port  => $port,
+            Debug => $verbose
+        ) or die("Can't create mailer object to $server:$port.");
+
+    }
 
     # eventually send helo
     $mailer->hello($helo) if ($helo);

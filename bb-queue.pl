@@ -196,12 +196,12 @@ set log y
 
 plot f using 1:3 title "tot" with boxes lc 1,   \\
   f using 1:4 title "active" with boxes,   \\
-  f using 1:5 title "KB" with lines,       \\
+  f using 1:5 title "kB" with lines,       \\
   f using 1:7 title "mps" with lines lw 2,   \\
   f using 1:11 title "mps*" with lines lw 2,   \\
   f using 1:8 title "qusage" with lines, \\
-  f using 1:9 title "KBps" with lines lw 2, \\
-  f using 1:12 title "KBps*" with lines lw 2 \\
+  f using 1:9 title "kBps" with lines lw 2, \\
+  f using 1:12 title "kBps*" with lines lw 2 \\
 
 END
       ;
@@ -217,7 +217,7 @@ sub main() {
     my ( $interval, $pagination, $domain, $outfile_fh ) = ( 5, 24, 0, *STDOUT );
 
     my @fields =
-      qw|total active KB     delay mps  usg   KBps  avg_wtime tput*  KBps*|;
+      qw|total active kB     delay mps  usg   kBps  avg_wtime tput*  kBps*|;
     my @fmt_fields_data =
       qw|%-5d  %5d    %12.2f %6d   %5.2f   %3.2f %8.2f %8.2f     %5.2f  %5.2f|;
     my @fmt_fields_head =
@@ -333,6 +333,34 @@ sub test() {
 
         foreach my $k (@keys) {
             print "k: $k, " . $domains{$k} . "\n";
+        }
+
+    }
+
+    sub test_re_2() {
+
+        my $t_postqueue = <<END
+         QueueID          Size      Date                Error                    QueueName                Sender/Recipient
+Mail1340880029723-224_2099:028782     28/06/12 12.40                               Accettazione             utente.uno\@sampledomain.babel.it
+END
+          ;
+        my $t_postqueue_1 =
+          '4908384CA2*     240 Tue Jul 10 19:10:21  rpolli@babel.it';
+        my $t_postqueue_2 =
+          '4908384CA2!     240 Tue Jul 10 19:10:21  rpolli@babel.it';
+        my $x_from = 'rpolli@babel.it';
+        my $x_date = "Tue Jul 10 19:10:21";
+        my $x_qid  = "4908384CA2";
+        {
+            $t_postqueue_1 =~ $re_postqueue;
+
+            my ( $qid, $qtype, $size, $date, $from ) = ( $1, $2, $3, $4, $5 );
+            die("mismatched qid")           unless ( $qid   eq $x_qid );
+            die("mismatched qtype")         unless ( $qtype eq "*" );
+            die("mismatched from: [$from]") unless ( $from  eq $x_from );
+
+            die("mismatched size") unless ( $size == 240 );
+            die("mismatched date") unless ( $date eq $x_date );
         }
 
     }
