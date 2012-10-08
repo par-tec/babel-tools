@@ -330,10 +330,14 @@ continue {
                 $rrqm, $wrqm, $r, $w );
 
             # read write size
-            printf( $fmt_rw_ops_head , $rsec, $wsec );
+            #   add measure unit
+            my $unit = "kBs";
+            $unit = "MBs" if($megabytes);
+            $unit = "sec" if($output_in_sectors);
+            printf( $fmt_rw_ops_head , "r ".$unit, "w ".$unit );
 
             # average read write size
-            printf( $fmt_avg_rwt_size_head, $avg_r_sz, $avg_w_sz, $avg_sz );
+            printf( $fmt_avg_rwt_size_head, $avg_r_sz.$unit, $avg_w_sz.$unit, $avg_sz.$unit );
 
             printf( $fmt_avg_rwt_time_head, $avg_r_tm, $avg_w_tm, $await );
 

@@ -264,7 +264,7 @@ sub main() {
             $mailer->auth( $username, $password );
         }
     }
-
+    $iterations = 1 unless($iterations gt 0);
     while ( $iterations-- > 0 ) {
 
         #
