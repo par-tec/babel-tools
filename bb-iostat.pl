@@ -4,8 +4,20 @@
 #
 # Author: rpolli@babel.it
 #
-
 # a simple iostat replacement returning some more statistics
+#
+# This script uses the info exposed in /proc/diskstats
+# and make some calculations using the following definition:
+#
+#     - Usage = usage_time / sampling_time
+#     - Arrival = sum of all iops in sampling_time (r+w)
+#     - operation_time = sum of all the time spent in iops (r+w)time
+#
+# Little's Law (to calculate L)
+#     - L = A * W    # queue_lenght = arrival_rate * average_wait_time
+# Usage Law (to calculate S)
+#     - U = S * X    # usage = service_time * exit_rate (thruput)
+#
 use strict;
 use diagnostics;
 
@@ -106,7 +118,7 @@ our $fmt_rw_merged_head = colorize( "%8s %8s ",     "red" );
 our $fmt_rw_ops      = "%7.2f %7.2f ";
 our $fmt_rw_ops_head = "%7s %7s ";
 
-our $fmt_avg_rwt_size      = colorize( "%8.2f %8.2f %8.2f", "blue" );
+our $fmt_avg_rwt_size      = colorize( "%10.2f %10.2f %10.2f", "blue" );
 our $fmt_avg_rwt_size_head = colorize( "%8s %8s %8s",       "blue" );
 
 our $fmt_avg_rwt_time      = colorize( "%9.2f %9.2f %9.2f", "green" );
@@ -332,12 +344,16 @@ continue {
             # read write size
             #   add measure unit
             my $unit = "kBs";
-            $unit = "MBs" if($megabytes);
-            $unit = "sec" if($output_in_sectors);
-            printf( $fmt_rw_ops_head , "r ".$unit, "w ".$unit );
+            $unit = "MBs" if ($megabytes);
+            $unit = "sec" if ($output_in_sectors);
+            printf( $fmt_rw_ops_head , "r " . $unit, "w " . $unit );
 
             # average read write size
-            printf( $fmt_avg_rwt_size_head, $avg_r_sz.$unit, $avg_w_sz.$unit, $avg_sz.$unit );
+            printf( $fmt_avg_rwt_size_head,
+                $avg_r_sz . $unit,
+                $avg_w_sz . $unit,
+                $avg_sz . $unit
+            );
 
             printf( $fmt_avg_rwt_time_head, $avg_r_tm, $avg_w_tm, $await );
 
