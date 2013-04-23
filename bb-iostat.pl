@@ -42,8 +42,10 @@ sub usage(@) {
     if ( defined $1 ) {
         print "Error: $1\n\n";
     }
-    print "usage: $0 <interval> <device> <pagination> <count> [options]\n" . "\n"
-      . "Like iostat but showing some more statistics\n" . "\n"
+    print "usage: $0 <interval> <device> <pagination> [count] [options]\n"
+      . "\n"
+      . "Like iostat but showing some more statistics\n" 
+      . "you can stop after <count> iterations, that is after interval*count seconds \n" . "\n"
       . "options:\n"
       . " -i : print data in iostat format\n"
       . " -s : print size in sectors instead of KiloBytes\n"
@@ -120,7 +122,7 @@ our $fmt_rw_ops      = "%7.2f %7.2f ";
 our $fmt_rw_ops_head = "%7s %7s ";
 
 our $fmt_avg_rwt_size      = colorize( "%10.2f %10.2f %10.2f", "blue" );
-our $fmt_avg_rwt_size_head = colorize( "%8s %8s %8s",       "blue" );
+our $fmt_avg_rwt_size_head = colorize( "%8s %8s %8s",          "blue" );
 
 our $fmt_avg_rwt_time      = colorize( "%9.2f %9.2f %9.2f", "green" );
 our $fmt_avg_rwt_time_head = colorize( "%9s %9s %9s",       "green" );
@@ -185,6 +187,7 @@ while (1) {
             ) = @tmp;
             if ( not defined $disks{$dev} ) {
                 $disks{$dev} = \@prev_0;
+
                 # continue just printing the headers
                 next;
             }
@@ -332,8 +335,9 @@ continue {
     );
 
     if ( ( $ln % $pagination ) == 0 ) {
+
         # headers don't count in interations
-        $count++; 
+        $count++;
         if ($iostat_like) {
             write;
 
@@ -370,5 +374,5 @@ continue {
 
     $ln++;
 
-    exit(0) if ($ln == $count); 
+    exit(0) if ( $ln == $count );
 }
