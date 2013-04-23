@@ -42,7 +42,7 @@ sub usage(@) {
     if ( defined $1 ) {
         print "Error: $1\n\n";
     }
-    print "usage: $0 <interval> <device> <pagination> [options]\n" . "\n"
+    print "usage: $0 <interval> <device> <pagination> <count> [options]\n" . "\n"
       . "Like iostat but showing some more statistics\n" . "\n"
       . "options:\n"
       . " -i : print data in iostat format\n"
@@ -54,13 +54,14 @@ sub usage(@) {
 }
 
 # parse input parameters
-my ( $interval, $device, $pagination ) = @ARGV;
+my ( $interval, $device, $pagination, $count ) = @ARGV;
 my ( $iostat_like, $verbose, $megabytes, $output_in_sectors, $size_factor,
     $help );
 
 usage("missing interval")   unless ($interval);
 usage("missing device")     unless ($device);
 usage("missing pagination") unless ($pagination);
+$count = -1 unless ($count);
 
 # print headers every pagination lines
 my $ln = 0;
@@ -184,6 +185,7 @@ while (1) {
             ) = @tmp;
             if ( not defined $disks{$dev} ) {
                 $disks{$dev} = \@prev_0;
+                # continue just printing the headers
                 next;
             }
             my @prev = @{ $disks{$dev} };
@@ -330,6 +332,8 @@ continue {
     );
 
     if ( ( $ln % $pagination ) == 0 ) {
+        # headers don't count in interations
+        $count++; 
         if ($iostat_like) {
             write;
 
@@ -346,7 +350,7 @@ continue {
             my $unit = "kBs";
             $unit = "MBs" if ($megabytes);
             $unit = "sec" if ($output_in_sectors);
-            printf( $fmt_rw_ops_head , "r " . $unit, "w " . $unit );
+            printf( $fmt_rw_ops_head , "r_" . $unit, "w_" . $unit );
 
             # average read write size
             printf( $fmt_avg_rwt_size_head,
@@ -365,4 +369,6 @@ continue {
     }
 
     $ln++;
+
+    exit(0) if ($ln == $count); 
 }
