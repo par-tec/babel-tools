@@ -11,7 +11,10 @@ import datetime
 import shlex
 import string
 from itertools import product
-from urllib.parse import urlparse
+try:
+    from urllib.parse import urlparse
+except:
+    from urlparse import urlparse
 
 import mysql.connector
 try:
@@ -62,9 +65,9 @@ def get_oodesktop():
     from time import sleep
     # Run and wait for the socket to be ready.
     ooserver = Popen(shlex.split(
-        'soffice --accept="pipe,name=soffice.pipe;urp;" --norestore --nologo --nodefault '))
+        'soffice --accept="pipe,name=soffice.pipe;urp;" --norestore --nologo --nodefault --headless'))
     atexit.register(ooserver.terminate)
-    sleep(1)
+    sleep(3)
     log.info("Connecting to ooserver")
     desktop = pyoo.Desktop(pipe='soffice.pipe')
     return desktop

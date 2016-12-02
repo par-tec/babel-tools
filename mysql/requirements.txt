@@ -1,2 +1,6 @@
-nose
+# OO bindings
 pyoo
+
+# Test stuff
+nose
+tox
