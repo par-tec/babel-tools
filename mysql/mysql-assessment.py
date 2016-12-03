@@ -58,6 +58,12 @@ def get_entries(uri='mysql://root:root@mysql'):
     cnx.close()
     return ret
 
+def parse_status(fpath):
+    with open(fpath) as fh:
+        clean_lines = (line.replace("|", "").strip() for line in fh)
+        split_lines = (line.split(" ", 1) for line in clean_lines if " " in line)
+        return {k.lower(): v.strip() for k, v in split_lines}
+    
 
 def get_oodesktop():
     from subprocess import Popen
@@ -67,7 +73,7 @@ def get_oodesktop():
     ooserver = Popen(shlex.split(
         'soffice --accept="pipe,name=soffice.pipe;urp;" --norestore --nologo --nodefault --headless'))
     atexit.register(ooserver.terminate)
-    sleep(3)
+    sleep(5)
     log.info("Connecting to ooserver")
     desktop = pyoo.Desktop(pipe='soffice.pipe')
     return desktop
@@ -92,7 +98,8 @@ def expenses_xls(mysql_status, fpath="out.ods"):
             if k in mysql_status:
                 try:
                     sheet[row, column + 1].value = int(mysql_status[k])
-                except ValueError:
+                except (ValueError, pyoo.com.sun.star.uno.RuntimeException) as e:
+                    log.exception("Can't parse value %r: %r using unparsed data", k, mysql_status[k])
                     sheet[row, column + 1].value = mysql_status[k]
         except AttributeError:
             # cell value is not a label, skip.
@@ -109,8 +116,9 @@ if __name__ == '__main__':
     parser.add_argument(
         '--spent_on', type=str, default=datetime.datetime.now().strftime("%Y-%m-01"),
         help='Valid values: expenses, extra_time')
-    parser.add_argument('--server', type=str, required=True,
-                        help='mysql connectstring')
+    parser.add_argument('--source', type=str, required=True,
+                        help='Info source like a connect-string - eg: mysql://[root:secret@]mysql[:3306] - or a filename containing the output of SHOW VARIABLES; and SHOW GLOBAL STATUS')
+
     parser.add_argument('--out', type=str, required=True,
                         help='outfile')
     parser.add_argument('--debug', default=False,
@@ -119,8 +127,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Get entries from redmine.
-    print(args.server)
-    mysql_status = get_entries(args.server)
+    print(args.source)
+    
+    if os.path.isfile(args.source):
+        mysql_status = parse_status(args.source)
+    else:
+        mysql_status = get_entries(args.source)
 
     if args.debug:
         log.setLevel(logging.DEBUG)
@@ -137,11 +149,16 @@ def test_get_status():
     assert [x for x in entries if 'ssl' in x.lower()]
 
 
+def test_parse_status():
+    ret = parse_status("test-status.out")
+    assert "max_connections" in ret
+
 def test_modify_sheet():
     entries = {
         'Ssl_session_cache_mode': 'Test placeholder',
         'max_connections': 1500,
         'innodb_open_files': 434,
+        'version': 'Sample Version',
         'bytes_sent': 45,
         'max_heap_table_size': 44,
         'threads_connected': 124,
