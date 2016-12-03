@@ -62,7 +62,9 @@ def parse_status(fpath):
     with open(fpath) as fh:
         clean_lines = (line.replace("|", "").strip() for line in fh)
         split_lines = (line.split(" ", 1) for line in clean_lines if " " in line)
-        return {k.lower(): v.strip() for k, v in split_lines}
+        strip_lines = (map(str.strip, row) for row in split_lines)
+        parse_int = ((k,int(v) if v.isdigit() else v) for k,v in strip_lines)
+        return {k.lower(): v for k, v in parse_int}
     
 
 def get_oodesktop():
@@ -96,11 +98,13 @@ def expenses_xls(mysql_status, fpath="out.ods"):
             if " " in k:
                 k, comment = k.split(" ", 1)  # Allow comments in sheet.
             if k in mysql_status:
+                log.info("Processing key %r", k)
                 try:
-                    sheet[row, column + 1].value = int(mysql_status[k])
-                except (ValueError, pyoo.com.sun.star.uno.RuntimeException) as e:
-                    log.exception("Can't parse value %r: %r using unparsed data", k, mysql_status[k])
-                    sheet[row, column + 1].value = mysql_status[k]
+                    sheet[row, column + 1].value = float(mysql_status[k])
+                except (ValueError,) as e:
+                    log.warning("Can't parse value %r: %r using unparsed data", k, mysql_status[k])
+                    sheet[row, column + 1].value = str(mysql_status[k])
+            
         except AttributeError:
             # cell value is not a label, skip.
             pass
@@ -157,7 +161,9 @@ def test_modify_sheet():
     entries = {
         'Ssl_session_cache_mode': 'Test placeholder',
         'max_connections': 1500,
+        'innodb_buffer_pool_size': 2e+34,
         'innodb_open_files': 434,
+        'query_cache_size': 123000,
         'version': 'Sample Version',
         'bytes_sent': 45,
         'max_heap_table_size': 44,
