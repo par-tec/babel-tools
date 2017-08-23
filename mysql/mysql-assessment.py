@@ -62,9 +62,20 @@ def parse_status(fpath):
     with open(fpath) as fh:
         clean_lines = (line.replace("|", "").strip() for line in fh)
         split_lines = (line.split(" ", 1) for line in clean_lines if " " in line)
+        split_lines = (line.split("\t", 1) for line in clean_lines if "\t" in line)
         strip_lines = (map(str.strip, row) for row in split_lines)
         parse_int = ((k,int(v) if v.isdigit() else v) for k,v in strip_lines)
-        return {k.lower(): v for k, v in parse_int}
+
+        my_status = {k.lower(): v for k, v in parse_int}
+
+        # Evaluate binary log size.
+        binlog_size_tot = sum(v for k,v in my_status.items() if "-bin." in k)
+        my_status['binlog_size_tot'] = binlog_size_tot
+
+        return my_status
+
+        
+    
     
 
 def get_oodesktop():
@@ -84,7 +95,7 @@ def get_oodesktop():
 def expenses_xls(mysql_status, fpath="out.ods"):
 
     desktop = get_oodesktop()
-    doc = desktop.open_spreadsheet('mysql_innodb_resource_requirements.ods')
+    doc = desktop.open_spreadsheet(os.path.join(os.path.dirname(__file__), 'mysql_innodb_resource_requirements.ods'))
     log.info("Spreadsheet open")
     sheet = doc.sheets[0]
 
