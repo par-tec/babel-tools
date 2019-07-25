@@ -15,8 +15,8 @@
 #
 # Little's Law (to calculate L)
 #     - L = A * W    # queue_lenght = arrival_rate * average_wait_time
-# Usage Law (to calculate S)
-#     - U = S * X    # usage = service_time * exit_rate (thruput)
+# Utilization Law (to calculate S)
+#     - U = S * X    # utilization = service_time * exit_rate (thruput)
 #
 use strict;
 use diagnostics;
