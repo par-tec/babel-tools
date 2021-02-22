@@ -10,6 +10,7 @@ import os
 import datetime
 import shlex
 import string
+import json
 from itertools import product
 try:
     from urllib.parse import urlparse
@@ -138,10 +139,12 @@ if __name__ == '__main__':
                         help='outfile')
     parser.add_argument('--debug', default=False,
                         action='store_true',
-                        help='Dump server response in /tmp/dump.json.')
+                        help='Run in debug mode.')
     args = parser.parse_args()
 
-    # Get entries from redmine.
+    if args.debug:
+        log.setLevel(logging.DEBUG)
+
     print(args.source)
     
     if os.path.isfile(args.source):
@@ -149,10 +152,7 @@ if __name__ == '__main__':
     else:
         mysql_status = get_entries(args.source)
 
-    if args.debug:
-        log.setLevel(logging.DEBUG)
-        print(mysql_status)
-        # simplejson.dump(mysql_status, open("/tmp/dump.json", "wb"))
+    log.debug(json.dumps(mysql_status, indent=4))
 
     # Run the actual function.
     expenses_xls(mysql_status, args.out)
